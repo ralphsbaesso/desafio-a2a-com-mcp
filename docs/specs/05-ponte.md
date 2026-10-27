@@ -12,7 +12,8 @@ Traduzir, para uma Task A2A, o resultado cru de um `tools/call reservar_sala`:
 | `CallToolResult` sem `isError` e `reservado == false` (decline) | `CANCELED` + mensagem `Reserva recusada.` |
 | `CallToolResult` com `isError` | `FAILED` + mensagem com o texto exato da tool |
 | `InputRequiredResult` | `INPUT_REQUIRED` + mensagem `alternativas: ...` + pendência guardada |
-| `MCPError` (ex.: `-32602` estado expirado/adulterado, `-32021`) | `FAILED` + mensagem `Erro MCP <code>: <message>` |
+| `MCPError` (ex.: `-32602` estado expirado/adulterado, `-32021`) | `FAILED` + mensagem `Servidor de salas recusou a chamada (erro MCP <code>).`; o texto do servidor vai só ao log |
+| erro de transporte / exceção inesperada / cancelamento | `FAILED` + mensagem genérica (`Servidor de salas indisponivel.` / `Erro interno do agente` / `Processamento interrompido.`), detalhe só no stderr. A Task nunca fica presa em `WORKING` |
 
 ## Pendência (estado guardado por Task)
 

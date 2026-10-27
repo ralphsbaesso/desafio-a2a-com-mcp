@@ -47,7 +47,7 @@ cliente A2A (validador / curl)
 │   ├── host_mcp.py           # cliente MCP (host): descoberta, resource, call_tool cru
 │   ├── tarefas.py            # Task A2A: modelo, store em memória, máquina de estados
 │   ├── ponte.py              # A PONTE: input_required ⇄ TASK_STATE_INPUT_REQUIRED
-│   ├── a2a.py                # card, JSON-RPC SendMessage/GetTask, erros A2A
+│   ├── servidor_a2a.py       # card, JSON-RPC SendMessage/GetTask, erros A2A
 │   ├── agente.py             # app Starlette + main
 │   └── tests/
 └── docs/

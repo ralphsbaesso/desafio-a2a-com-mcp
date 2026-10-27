@@ -1,6 +1,6 @@
 # Spec 04 — Agente como servidor A2A
 
-Cobre o requisito 4 do desafio. Arquivos: `agente/tarefas.py`, `agente/a2a.py`, `agente/agente.py`.
+Cobre o requisito 4 do desafio. Arquivos: `agente/tarefas.py`, `agente/servidor_a2a.py`, `agente/agente.py`.
 
 ## Endpoints (Starlette + uvicorn, porta `AGENTE_PORT`=7300)
 
@@ -60,7 +60,7 @@ INPUT_REQUIRED → WORKING → COMPLETED | FAILED | CANCELED | INPUT_REQUIRED
 - `transitar(tarefa, novo)` valida a tabela acima e levanta `EstadoTerminal` se o atual é `COMPLETED`, `CANCELED` ou `FAILED`.
 - Dentro de um único `SendMessage` a Task passa por `SUBMITTED` e `WORKING` antes de terminar: as transições são aplicadas no objeto do store (um `GetTask` concorrente vê o estado corrente) e a resposta do `SendMessage` traz o estado final daquela rodada.
 
-## JSON-RPC (`a2a.py`)
+## JSON-RPC (`servidor_a2a.py`)
 
 Envelope: `{"jsonrpc": "2.0", "id", "method", "params"}`. Respostas: `{"jsonrpc":"2.0","id",...,"result": {"task": {...}}}` (wire 08/10) ou `{"error": {"code","message","data?"}}`. HTTP sempre 200 para JSON-RPC válido (erro A2A vai no corpo); corpo não-JSON → `-32700`; envelope inválido → `-32600`; método desconhecido → `-32601`; params inválidos → `-32602`.
 
