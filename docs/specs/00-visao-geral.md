@@ -65,6 +65,7 @@ Os diretórios `servidor-mcp` e `agente` não são pacotes importáveis (hífen 
 | `AGENTE_HOST` / `AGENTE_PORT` | agente | `127.0.0.1` / `7300` | bind do A2A |
 | `MCP_URL` | agente | `http://127.0.0.1:7301/mcp` | endpoint do servidor MCP |
 | `AGENTE_URL_PUBLICA` | agente | `http://127.0.0.1:7300/a2a` | URL publicada no card |
+| `MCP_TIMEOUT` | agente | `30` (s) | timeout de cada request MCP |
 
 ## Princípios que atravessam todas as specs
 
