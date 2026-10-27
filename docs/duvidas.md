@@ -15,5 +15,7 @@ Pontos que precisaram de uma decisão durante a implementação. Cada um foi res
 | 9 | Na retomada, se a alternativa escolhida foi ocupada entre a pausa e o retry, o SDK re-pergunta com nova lista. | **Agente re-pausa a Task** com a lista nova (mantém `INPUT_REQUIRED`). | Falhar a Task |
 | 10 | Ferramenta de QA: o `qa-panel` roda 5 agentes por task. | **Rodado após cada task** conforme pedido. | — |
 | 11 | `starlette` 1.10 (dependência do `mcp` 2.3.0) exige Python ≥ 3.11; o desafio fala em 3.10+ para o validador. | **`requires-python = ">=3.11"`** para os dois processos; o validador (stdlib) continua rodando em 3.10. Documentado no README. | Travar `starlette<1.10` para manter 3.10 |
+| 12 | `responsavel` não tem regra no enunciado. | **Exigir nome não vazio com até 100 caracteres** (`Responsavel invalido: ...`), validado antes de qualquer pausa. | Aceitar qualquer string |
+| 13 | Replay do mesmo `requestState` + `inputResponses` dentro do TTL (ex.: retry duplicado escolhendo outra alternativa) cria outra reserva. | **Aceitar**: cada retry é um request independente e a spec não exige uso único; o SDK re-pergunta se a lista mudou. Vai para a seção de decisões técnicas do README final (T07). | Deduplicar por (sala, inicio, fim, responsavel) ou nonce de uso único |
 
 Preencha-se durante a implementação; itens novos vão ao final.

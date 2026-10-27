@@ -1,7 +1,10 @@
 """Servidor MCP da Central de Salas (Streamable HTTP, spec 2026-07-28).
 
-Expõe três tools e um resource. A tool de reserva chega na task T03.
-Cada request recebido é registrado no stderr com método, id e traceparent.
+Expõe três tools e um resource. `reservar_sala` usa o ciclo MRTR do SDK: quando a sala
+está ocupada, o resolver `escolha_de_sala` devolve uma elicitation em form mode e o SDK
+responde `input_required` com um `requestState` selado (AES-256-GCM, chave de
+REQUEST_STATE_SECRET); o cliente retorna com `inputResponses` + `requestState` e a tool
+conclui. Cada request recebido é registrado no stderr com método, id e traceparent.
 """
 
 from __future__ import annotations
@@ -10,12 +13,14 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.resolve import AcceptedElicitation, Elicit, ElicitationResult, Resolve
 from mcp.server.request_state import RequestStateSecurity
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, create_model
 
 import dominio
 
@@ -50,6 +55,17 @@ class Disponibilidade(BaseModel):
     conflitos: list[ConflitoOut]
 
 
+class ReservaOut(BaseModel):
+    reserva: str | None = None
+    reservado: bool = True
+    sala: str | None = None
+    inicio: str | None = None
+    fim: str | None = None
+    responsavel: str | None = None
+    politica: str | None = None
+    motivo: str | None = None
+
+
 # --------------------------------------------------------------------------- tools e resource
 
 
@@ -66,6 +82,53 @@ def consultar_disponibilidade(sala: str, inicio: str, fim: str) -> Disponibilida
         sala=sala,
         livre=not achados,
         conflitos=[ConflitoOut(id=r["id"], inicio=r["inicio"], fim=r["fim"], responsavel=r["responsavel"]) for r in achados],
+    )
+
+
+MENSAGEM_ESCOLHA = "A sala pedida esta ocupada nesse intervalo. Escolha uma alternativa."
+
+
+def escolha_de_sala(sala: str, inicio: str, fim: str, responsavel: str) -> Elicit[Any] | None:
+    """Resolver MRTR: sem conflito devolve None; com conflito pede a escolha entre as alternativas.
+
+    Roda antes do corpo de `reservar_sala` (e de novo no retry). O SDK transforma o `Elicit`
+    em `input_required` + `requestState`; no retry, injeta a resposta do cliente se a
+    pergunta renderizada for a mesma que foi feita.
+    """
+    ini, end = dominio.validar_pedido(sala, inicio, fim)
+    dominio.validar_responsavel(responsavel)
+    if not dominio.conflitos(sala, ini, end):
+        return None
+    alternativas = dominio.alternativas(sala, ini, end)
+    if not alternativas:
+        raise ToolError(dominio.ERRO_SEM_ALTERNATIVA)
+    # Schema plano: uma propriedade `sala` restrita às alternativas (enum; const com uma só).
+    Escolha = create_model(
+        "Escolha", sala=(Literal[tuple(alternativas)], Field(description="Sala alternativa escolhida"))
+    )
+    return Elicit(MENSAGEM_ESCOLHA, Escolha)
+
+
+def reservar_sala(
+    sala: str,
+    inicio: str,
+    fim: str,
+    responsavel: str,
+    escolha: Annotated[ElicitationResult[Any], Resolve(escolha_de_sala)],
+) -> ReservaOut:
+    """Reserva uma sala. Se o intervalo estiver ocupado, pergunta qual alternativa usar."""
+    if not isinstance(escolha, AcceptedElicitation):
+        return ReservaOut(reservado=False, motivo="recusado")
+    destino = sala if escolha.data is None else escolha.data.sala
+    nome = dominio.validar_responsavel(responsavel)
+    reserva = dominio.reservar_se_livre(destino, inicio, fim, nome)
+    return ReservaOut(
+        reserva=reserva["id"],
+        sala=destino,
+        inicio=inicio,
+        fim=fim,
+        responsavel=nome,
+        politica=dominio.POLITICA_VERSAO,
     )
 
 
@@ -121,6 +184,7 @@ def criar_servidor(segredo: str, ttl: float = 600.0) -> MCPServer:
     )
     mcp.tool()(listar_salas)
     mcp.tool()(consultar_disponibilidade)
+    mcp.tool()(reservar_sala)
     mcp.resource("politica://uso", mime_type="text/markdown")(politica_de_uso)
     return mcp
 

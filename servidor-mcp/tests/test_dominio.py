@@ -93,8 +93,43 @@ def test_alternativas_excluem_ocupadas_e_podem_ser_vazias():
     assert dominio.alternativas("sala-mirante", ini, end) == []
 
 
-def test_criar_reserva_fica_visivel():
-    r = dominio.criar_reserva("sala-porao", h("09:00"), h("10:00"), "Doc")
+def test_reservar_se_livre_fica_visivel_e_recusa_ocupada():
+    r = dominio.reservar_se_livre("sala-porao", h("09:00"), h("10:00"), "Doc")
     assert r["id"] == "res-0003"
     ini, end = dominio.validar_pedido("sala-porao", h("09:30"), h("10:30"))
     assert dominio.conflitos("sala-porao", ini, end) == [r]
+    assert erro(dominio.reservar_se_livre, "sala-porao", h("09:30"), h("10:30"), "Biff") == dominio.ERRO_SALA_OCUPADA
+
+
+def test_responsavel_vazio_ou_gigante_e_rejeitado():
+    assert erro(dominio.validar_responsavel, "   ") == dominio.ERRO_RESPONSAVEL
+    assert erro(dominio.validar_responsavel, "x" * 101) == dominio.ERRO_RESPONSAVEL
+    assert erro(dominio.validar_responsavel, "Doc\n[mcp] forjado") == dominio.ERRO_RESPONSAVEL
+    assert dominio.validar_responsavel("x" * 100) == "x" * 100
+    assert dominio.validar_responsavel("  Doc ") == "Doc"
+
+
+def test_reservas_concorrentes_na_mesma_sala_so_uma_vence(monkeypatch):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    original = dominio.conflitos
+
+    def lento(*args):
+        time.sleep(0.01)  # alarga a janela entre checar e gravar
+        return original(*args)
+
+    monkeypatch.setattr(dominio, "conflitos", lento)
+
+    def tentar(i):
+        try:
+            return dominio.reservar_se_livre("sala-aquario", h("09:00"), h("10:00"), f"p{i}")["id"]
+        except ToolError as e:
+            return str(e)
+
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        resultados = list(pool.map(tentar, range(20)))
+    vencedoras = [r for r in resultados if r.startswith("res-")]
+    assert vencedoras == ["res-0003"]
+    assert resultados.count(dominio.ERRO_SALA_OCUPADA) == 19
+    assert len(dominio.RESERVAS) == 3

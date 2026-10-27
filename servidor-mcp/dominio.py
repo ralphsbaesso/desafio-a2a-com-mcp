@@ -7,6 +7,7 @@ memória e são reiniciadas a cada subida do processo (permitido pelo desafio).
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,9 @@ ERRO_JANELA = "Fora da janela de uso: a politica permite reservas entre 08:00 e 
 ERRO_DURACAO = "Duracao acima do limite: a politica permite no maximo 2 horas"
 ERRO_INTERVALO = "Intervalo invalido: fim deve ser posterior a inicio"
 ERRO_SEM_ALTERNATIVA = "Sem alternativas disponiveis no intervalo"
+ERRO_SALA_OCUPADA = "Sala ocupada: o intervalo foi reservado por outro pedido antes de concluir"
+ERRO_RESPONSAVEL = "Responsavel invalido: informe um nome nao vazio, imprimivel, com ate 100 caracteres"
+RESPONSAVEL_MAXIMO = 100
 
 
 def erro_sala_inexistente(sala: str) -> str:
@@ -36,11 +40,18 @@ POLITICA_TEXTO: str = (DADOS / "politica-de-uso.md").read_text(encoding="utf-8")
 POLITICA_VERSAO: str = POLITICA_TEXTO.splitlines()[0].split(":", 1)[1].strip()
 
 RESERVAS: list[dict[str, Any]] = []
+# O SDK executa tools sincronas em thread: a checagem de conflito e a gravacao
+# acontecem sob este lock para que duas reservas simultaneas nao se sobreponham.
+TRAVA = threading.Lock()
+_proximo_id = 1
 
 
 def reiniciar_reservas() -> None:
     """Volta as reservas ao estado do starter (usado na subida e nos testes)."""
-    RESERVAS[:] = json.loads((DADOS / "reservas.json").read_text(encoding="utf-8"))
+    global _proximo_id
+    with TRAVA:
+        RESERVAS[:] = json.loads((DADOS / "reservas.json").read_text(encoding="utf-8"))
+        _proximo_id = len(RESERVAS) + 1
 
 
 reiniciar_reservas()
@@ -63,6 +74,13 @@ def _instante(texto: str) -> datetime:
     return valor.astimezone(FUSO_POLITICA)
 
 
+def validar_responsavel(responsavel: str) -> str:
+    nome = responsavel.strip()
+    if not nome or len(nome) > RESPONSAVEL_MAXIMO or not nome.isprintable():
+        raise ToolError(ERRO_RESPONSAVEL)
+    return nome
+
+
 def validar_pedido(sala: str, inicio: str, fim: str) -> tuple[datetime, datetime]:
     """Aplica, nesta ordem: sala existe, datas válidas, fim > inicio, janela, duração."""
     obter_sala(sala)
@@ -78,9 +96,13 @@ def validar_pedido(sala: str, inicio: str, fim: str) -> tuple[datetime, datetime
 
 
 def conflitos(sala: str, ini: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Reservas da sala que se sobrepõem ao intervalo (bordas iguais não conflitam)."""
+    """Reservas da sala que se sobrepõem ao intervalo (bordas iguais não conflitam).
+
+    Leitura sem a trava, sobre um snapshot: pode ficar um instante defasada, e por isso
+    a decisão final de gravar é sempre revalidada dentro de `reservar_se_livre`.
+    """
     achados = []
-    for r in RESERVAS:
+    for r in tuple(RESERVAS):
         if r["sala"] != sala:
             continue
         if _instante(r["inicio"]) < end and ini < _instante(r["fim"]):
@@ -99,13 +121,20 @@ def alternativas(sala: str, ini: datetime, end: datetime) -> list[str]:
     return [s["id"] for s in candidatas[:MAX_ALTERNATIVAS]]
 
 
-def criar_reserva(sala: str, inicio: str, fim: str, responsavel: str) -> dict[str, Any]:
-    reserva = {
-        "id": f"res-{len(RESERVAS) + 1:04d}",
-        "sala": sala,
-        "inicio": inicio,
-        "fim": fim,
-        "responsavel": responsavel,
-    }
-    RESERVAS.append(reserva)
+def reservar_se_livre(sala: str, inicio: str, fim: str, responsavel: str) -> dict[str, Any]:
+    """Seção crítica: revalida o pedido, confere o conflito e grava, tudo sob o lock."""
+    global _proximo_id
+    ini, end = validar_pedido(sala, inicio, fim)
+    with TRAVA:
+        if conflitos(sala, ini, end):
+            raise ToolError(ERRO_SALA_OCUPADA)
+        reserva = {
+            "id": f"res-{_proximo_id:04d}",
+            "sala": sala,
+            "inicio": inicio,
+            "fim": fim,
+            "responsavel": responsavel,
+        }
+        _proximo_id += 1
+        RESERVAS.append(reserva)
     return reserva
