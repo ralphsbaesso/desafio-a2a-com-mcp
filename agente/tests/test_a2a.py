@@ -67,7 +67,10 @@ def enviar(texto: str, task_id: str | None = None, message_id: str = "msg-1") ->
 
 def test_agent_card_segue_o_wire_07():
     card = a2a.agent_card("http://127.0.0.1:7300/a2a")
-    esperado = json.load(open("exemplos/wire/07-a2a-agent-card.json"))["response"]["body"]
+    from pathlib import Path
+
+    wire = Path(__file__).resolve().parents[2] / "exemplos" / "wire" / "07-a2a-agent-card.json"
+    esperado = json.loads(wire.read_text())["response"]["body"]
     assert card == esperado
 
 
@@ -194,11 +197,12 @@ def test_store_expurga_terminais_antigas_ao_atingir_o_teto():
         t.transitar(tarefas.COMPLETED)
     nova = store.criar()
     assert len(store) == 3 and store.obter(antigas[0].id) is None and store.obter(nova.id) is nova
-    # tasks nao terminais nunca sao expurgadas
+    # tasks nao terminais nunca sao expurgadas: com o store cheio de vivas, criar recusa
     store2 = Store(teto=1)
     viva = store2.criar()
-    outra = store2.criar()
-    assert store2.obter(viva.id) is viva and store2.obter(outra.id) is outra
+    with pytest.raises(tarefas.StoreCheio):
+        store2.criar()
+    assert store2.obter(viva.id) is viva
 
 
 async def test_traceparent_invalido_e_ignorado():

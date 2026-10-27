@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,8 +24,15 @@ TERMINAIS = frozenset({COMPLETED, FAILED, CANCELED})
 TRANSICOES: dict[str, frozenset[str]] = {
     SUBMITTED: frozenset({WORKING}),
     WORKING: frozenset({COMPLETED, FAILED, CANCELED, INPUT_REQUIRED}),
-    INPUT_REQUIRED: frozenset({WORKING, INPUT_REQUIRED}),
+    INPUT_REQUIRED: frozenset({WORKING, INPUT_REQUIRED, FAILED, CANCELED}),
 }
+TTL_PAUSA_PADRAO = 1800.0  # uma Task pausada e abandonada vira FAILED depois disso
+MAX_ESCOLHAS_INVALIDAS = 10  # depois disso a Task pausada termina em FAILED
+MAX_RODADAS = 5  # pausas (input_required) por Task; alem disso, FAILED
+
+
+class StoreCheio(Exception):
+    """O teto foi atingido só com Tasks vivas: nada pode ser expurgado."""
 
 ROLE_USER = "ROLE_USER"
 ROLE_AGENT = "ROLE_AGENT"
@@ -89,7 +97,26 @@ class Tarefa:
     traceparent: str | None = None
     pedido: dict[str, Any] | None = None   # argumentos do tools/call original
     pendencia: Pendencia | None = None     # spec 05; nunca vai para o wire
+    pausada_em: float | None = None        # relogio monotonico da ultima pausa (TTL)
+    escolhas_invalidas: int = 0
+    rodadas: int = 0                       # quantas vezes a Task ja pausou
     trava: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
+
+    def marcar_pausa(self) -> None:
+        self.pausada_em = time.monotonic()
+
+    def pausa_expirada(self, ttl: float, agora: float | None = None) -> bool:
+        if self.estado != INPUT_REQUIRED or self.pausada_em is None:
+            return False
+        return (agora if agora is not None else time.monotonic()) - self.pausada_em > ttl
+
+    def expirar_pausa(self, ttl: float, agora: float | None = None) -> bool:
+        """Se a pausa passou do TTL, termina em FAILED por abandono. Devolve True quando expirou agora."""
+        if not self.pausa_expirada(ttl, agora):
+            return False
+        self.responder("Pausa expirada: a escolha nao chegou a tempo.")
+        self.transitar(FAILED)
+        return True
 
     @property
     def terminal(self) -> bool:
@@ -137,16 +164,29 @@ class Store:
     (WORKING / INPUT_REQUIRED) nunca são removidas.
     """
 
-    def __init__(self, teto: int = 10_000) -> None:
+    def __init__(self, teto: int = 10_000, ttl_pausa: float = TTL_PAUSA_PADRAO) -> None:
         self._tarefas: dict[str, Tarefa] = {}
         self._teto = teto
+        self.ttl_pausa = ttl_pausa
 
     def criar(self, traceparent: str | None = None, context_id: str | None = None) -> Tarefa:
         if len(self._tarefas) >= self._teto:
+            self.expirar_pausas()
             self._expurgar()
+            if len(self._tarefas) >= self._teto:
+                raise StoreCheio(f"{len(self._tarefas)} Tasks vivas; teto de {self._teto}")
         tarefa = Tarefa(id=novo_id("task"), context_id=context_id or novo_id("ctx"), traceparent=traceparent)
         self._tarefas[tarefa.id] = tarefa
         return tarefa
+
+    def expirar_pausas(self, agora: float | None = None) -> list[Tarefa]:
+        """Tasks pausadas há mais que `ttl_pausa` terminam em FAILED por abandono.
+
+        Invariante: muda o estado de Tasks sem a trava delas. É seguro porque não há
+        `await` aqui e `retomar` sai de INPUT_REQUIRED de forma síncrona, antes do
+        primeiro `await`, com a trava adquirida.
+        """
+        return [t for t in list(self._tarefas.values()) if t.expirar_pausa(self.ttl_pausa, agora)]
 
     def _expurgar(self) -> None:
         excedente = len(self._tarefas) - self._teto + 1

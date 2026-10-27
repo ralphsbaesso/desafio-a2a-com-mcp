@@ -13,7 +13,7 @@ from typing import Any
 import ponte
 import tarefas
 from host_mcp import HostMCP, traceparent_valido
-from tarefas import Mensagem, Store, Tarefa
+from tarefas import Mensagem, Store, StoreCheio, Tarefa
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -137,7 +137,11 @@ class ServidorA2A:
 
         if task_id is None:
             pedido = interpretar_pedido(texto)          # antes de abrir a Task: pedido inválido não cria Task
-            tarefa = self.store.criar(traceparent, context_id)
+            try:
+                tarefa = self.store.criar(traceparent, context_id)
+            except StoreCheio as cheio:
+                print(f"[agente] store cheio: {cheio}", file=sys.stderr, flush=True)
+                raise ErroA2A(INTERNAL_ERROR, "Agente sem capacidade no momento; tente mais tarde") from None
             tarefa.pedido = pedido
             tarefa.receber(entrada)
             await ponte.executar(tarefa, self.host)
@@ -164,6 +168,9 @@ class ServidorA2A:
         tarefa = self.store.obter(task_id) if isinstance(task_id, str) else None
         if tarefa is None:
             raise ErroA2A(TASK_NOT_FOUND, f"Task nao encontrada: {task_id!r}")
+        # TTL preguiçoso, por Task: quem lê ou retoma uma pausa abandonada já a vê como FAILED.
+        if tarefa.expirar_pausa(self.store.ttl_pausa):
+            ponte.registrar(tarefa, "motivo='pausa expirada'")
         return tarefa
 
 
