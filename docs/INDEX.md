@@ -21,8 +21,8 @@ Glossário dos documentos deste diretório. Só o que está dentro de `docs/`.
 
 ## Atividades (`tasks/`)
 
-- `tasks/pedding/` — pendentes, em ordem de execução (T01 → T07).
-- `tasks/done/` — concluídas (movidas após QA e commit).
+- `tasks/pedding/` — pendentes, em ordem de execução.
+- `tasks/done/` — concluídas (movidas após painel de QA e commit), cada uma com um "Registro da conclusão" no fim.
 
 | Task | Título | Spec |
 |---|---|---|
