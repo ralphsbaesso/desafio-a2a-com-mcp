@@ -20,7 +20,7 @@ Cobre o requisito 6 e o bloco "Validação e entrega" do desafio, mais as duas s
 ## Estrutura do README.md final
 
 1. **Título + descrição do projeto** (pedido do task.md): o que é, os dois processos, stack, diagrama curto.
-2. **Como rodar**: pré-requisitos (Python ≥ 3.10, `uv`), clone, `make install`, gerar e exportar `REQUEST_STATE_SECRET`, terminal 1 `make mcp`, terminal 2 `make agente`, `make validar`. Comandos literais, testados a partir de um clone limpo. Também os comandos sem `make`.
+2. **Como rodar**: pré-requisitos (Python ≥ 3.11 para os processos, `uv`; o validador roda em 3.10+), clone, `make install`, gerar e exportar `REQUEST_STATE_SECRET`, terminal 1 `make mcp`, terminal 2 `make agente`, `make validar`. Comandos literais, testados a partir de um clone limpo. Também os comandos sem `make`.
 3. **Onde a ponte acontece**: parágrafo apontando `agente/ponte.py::pausar` (o `input_required` vira `TASK_STATE_INPUT_REQUIRED`) e `agente/ponte.py::retomar` (o `requestState` volta ao servidor em `host_mcp.py::reservar`), com o par de ids no stderr do servidor.
 4. **Decisões técnicas**: proteção do `requestState` (AES-256-GCM via `RequestStateSecurity` do SDK, chave do ambiente, HKDF), validade (TTL 600 s configurável 300–1800), estado das Tasks (dicionário em memória no agente, pendência por Task), capability `form`+`url` emitida pelo SDK, logging de requests barrados pelo transporte, retry re-perguntando quando a lista muda, mensagens de erro com prefixo do SDK.
 5. **Saída do validador**: bloco de código com a saída completa da última execução (36 PASS).

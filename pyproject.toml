@@ -1,0 +1,26 @@
+[project]
+name = "desafio-a2a-com-mcp"
+version = "1.0.0"
+description = "A Ponte: um agente A2A com um servidor MCP por dentro (Central de Salas da Hill Valley Tech)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp==2.3.0",
+    "starlette==1.10.0",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["servidor-mcp/tests", "agente/tests"]
+pythonpath = ["servidor-mcp", "agente"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

@@ -23,7 +23,7 @@ cliente A2A (validador / curl)
 
 | Item | Escolha | Motivo |
 |---|---|---|
-| Linguagem | Python ≥ 3.10 (desenvolvido em 3.13) | Node local é 18 (< 20 exigido). Os exemplos de wire do starter foram gerados pelo SDK Python (`__main__:escolha_de_sala`, `title: listar_salasArguments`, prefixo `v1.` no requestState). |
+| Linguagem | Python ≥ 3.11 (desenvolvido em 3.13; o validador continua rodando em 3.10) | Node local é 18 (< 20 exigido). Os exemplos de wire do starter foram gerados pelo SDK Python (`__main__:escolha_de_sala`, `title: listar_salasArguments`, prefixo `v1.` no requestState). |
 | SDK MCP | `mcp==2.3.0` (spec `2026-07-28`) | Obrigatório. Traz `MCPServer`, `Resolve`/`Elicit` (MRTR), `RequestStateSecurity` (AES-GCM + HMAC via HKDF), transporte moderno sem sessão e cliente com `allow_input_required=True`. |
 | HTTP do agente | `starlette` + `uvicorn` (já são dependências do `mcp`) | Sem dependência extra; o binding JSON-RPC do A2A é pequeno e escrito à mão para a ponte ficar visível. |
 | Gestão de deps | `uv` + `pyproject.toml` + `uv.lock` | Versões travadas. |

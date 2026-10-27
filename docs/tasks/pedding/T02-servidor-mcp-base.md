@@ -6,6 +6,7 @@ Spec: [01-servidor-mcp-base](../../specs/01-servidor-mcp-base.md)
 
 - [ ] `servidor-mcp/dominio.py`: carga de `dados/`, `obter_sala`, `validar_pedido`, `conflitos`, `alternativas`, constantes de mensagens, `POLITICA_VERSAO`.
 - [ ] `servidor-mcp/servidor.py`: `MCPServer("central-de-salas")`, tools `listar_salas` e `consultar_disponibilidade` com modelos de saída, resource `politica://uso` (`text/markdown`), middleware de log no stderr, `main` lendo env e exigindo `REQUEST_STATE_SECRET` (já configurando `RequestStateSecurity`, usado na T03).
+- [ ] Configuração: variável de ambiente vazia conta como ausente; porta e `REQUEST_STATE_TTL` inválidos saem com mensagem clara (sem traceback).
 - [ ] Testes `servidor-mcp/tests/test_dominio.py` e `test_servidor.py`.
 
 ## Critério de pronto
